@@ -70,13 +70,8 @@ TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
 TOGETHER_API_KEY = "a6c2e9a28b4572aba3a385a02eab43c4b49b92680b48ea1dbf73b948c30f7d31"  # Replace this with your real key (use environment variables in production)
 TOGETHER_MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1"  # Or your preferred model
 
-# REST_AUTH_REGISTER_SERIALIZERS = {
-#     'REGISTER_SERIALIZER': 'dj_rest_auth.registration.serializers.RegisterSerializer',
-# }
-REST_AUTH_SERIALIZERS = {
-    'REGISTER_SERIALIZER':      'users.serializers.CustomRegisterSerializer',
-    'LOGIN_SERIALIZER':         'users.serializers.UsernameEmailLoginSerializer',
-    'SOCIAL_LOGIN_SERIALIZER':  'users.serializers.SocialLoginSerializer',
+REST_AUTH = {
+    'REGISTER_SERIALIZER': 'users.serializers.CustomRegisterSerializer',
 }
 
 # Allauth configuration
@@ -91,11 +86,15 @@ ACCOUNT_LOGIN_METHODS = ['email', 'username']
 
 # which fields are collected at signup
 ACCOUNT_SIGNUP_FIELDS = {
-    'full_name*',
     'username*',
     'email*',
     'password1*',
     'password2*',
+    'first_name*',
+    'last_name*',
+    'role*',
+    'gender*',
+    'phone_number*',
 }
 
 ACCOUNT_USER_MODEL_USERNAME_FIELD = 'username'

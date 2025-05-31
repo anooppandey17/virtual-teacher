@@ -14,6 +14,20 @@ class UserManager(BaseUserManager):
             raise ValueError('The Username field must be set')
 
         email = self.normalize_email(email)
+        
+        # Set default role if not provided
+        if 'role' not in extra_fields:
+            extra_fields['role'] = User.Role.LEARNER
+
+        # Ensure required fields are included
+        required_fields = ['first_name', 'last_name', 'role', 'gender', 'phone_number']
+        if extra_fields.get('role') == User.Role.LEARNER:
+            required_fields.append('grade')
+        
+        for field in required_fields:
+            if field not in extra_fields:
+                raise ValueError(f'The {field} field must be set')
+
         user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -23,6 +37,11 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('role', User.Role.ADMIN)
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('first_name', 'Admin')
+        extra_fields.setdefault('last_name', 'User')
+        extra_fields.setdefault('gender', User.Gender.OTHER)
+        extra_fields.setdefault('phone_number', '')
+        extra_fields.setdefault('grade', '')
 
         if not extra_fields['is_staff']:
             raise ValueError('Superuser must have is_staff=True.')
@@ -39,13 +58,34 @@ class User(AbstractUser):
         TEACHER = 'TEACHER', _('Teacher')
         LEARNER = 'LEARNER', _('Learner')
 
+    class Gender(models.TextChoices):
+        MALE = 'M', _('Male')
+        FEMALE = 'F', _('Female')
+        OTHER = 'O', _('Other')
+
+    class Grade(models.TextChoices):
+        GRADE_1 = '1', _('Grade 1')
+        GRADE_2 = '2', _('Grade 2')
+        GRADE_3 = '3', _('Grade 3')
+        GRADE_4 = '4', _('Grade 4')
+        GRADE_5 = '5', _('Grade 5')
+        GRADE_6 = '6', _('Grade 6')
+        GRADE_7 = '7', _('Grade 7')
+        GRADE_8 = '8', _('Grade 8')
+        GRADE_9 = '9', _('Grade 9')
+        GRADE_10 = '10', _('Grade 10')
+        GRADE_11 = '11', _('Grade 11')
+        GRADE_12 = '12', _('Grade 12')
+
     email = models.EmailField(unique=True)
-    full_name = models.CharField(max_length=255)
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.LEARNER)
+    gender = models.CharField(max_length=1, choices=Gender.choices, blank=True)
+    phone_number = models.CharField(max_length=15, blank=True)
     date_joined = models.DateTimeField(default=timezone.now)
+    grade = models.CharField(max_length=2, choices=Grade.choices, blank=True)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'full_name']
+    REQUIRED_FIELDS = ['username']
 
     objects = UserManager()
 

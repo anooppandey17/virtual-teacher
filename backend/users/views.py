@@ -1,9 +1,9 @@
 # users/views.py
 
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.exceptions import ObjectDoesNotExist
 from .models import User #, LearnerProfile
 from .serializers import (
@@ -17,10 +17,41 @@ from parents.serializers import ParentProfileSerializer
 from teachers.serializers import TeacherProfileSerializer
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
+from django.contrib.auth import get_user_model
+from rest_framework import status
+
+User = get_user_model()
 
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'message': 'CSRF cookie set'})
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_username(request):
+    username = request.GET.get('username', '').strip()
+    if not username:
+        return Response({'detail': 'Username is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    exists = User.objects.filter(username=username).exists()
+    if exists:
+        return Response({'detail': 'Username is already taken'}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'detail': 'Username is available'}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def current_user(request):
+    if request.user.is_authenticated:
+        return Response({
+            'username': request.user.username,
+            'email': request.user.email,
+            'role': request.user.role,
+            'first_name': request.user.first_name,
+            'last_name': request.user.last_name,
+            'gender': request.user.gender,
+            'phone_number': request.user.phone_number,
+        })
+    return Response({'detail': 'Not authenticated'}, status=401)
+
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -110,13 +141,3 @@ class LearnerProfileView(APIView):
 
         serializer = LearnerProfileSerializer(profiles, many=True)
         return Response(serializer.data)
-
-@api_view(['GET'])
-def current_user(request):
-    if request.user.is_authenticated:
-        return Response({
-            'username': request.user.username,
-            'email': request.user.email,
-            'role': request.user.role,
-        })
-    return Response({'detail': 'Not authenticated'}, status=401)
