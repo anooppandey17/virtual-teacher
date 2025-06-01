@@ -1,111 +1,132 @@
 # learners/services.py
 import requests
 from django.conf import settings
-from django.http import StreamingHttpResponse
 import json
+import logging
 import time
-import re
+
+logger = logging.getLogger(__name__)
 
 def generate_ai_response(prompt_text, stream=False):
+    """Generate AI response using Together AI API with optional streaming support"""
+    logger.info(f"Generating AI response for prompt: {prompt_text[:100]}...")
+
     headers = {
         "Authorization": f"Bearer {settings.TOGETHER_API_KEY}",
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
     }
+
+    formatted_prompt = f"""You are a helpful AI teacher. Please provide a clear, informative, and educational response to the following question or topic:
+
+{prompt_text}
+
+Please be thorough but concise in your explanation."""
 
     payload = {
         "model": settings.TOGETHER_MODEL,
         "messages": [
-            {"role": "user", "content": prompt_text}
+            {"role": "system", "content": "You are a helpful AI teacher, providing clear and educational responses."},
+            {"role": "user", "content": formatted_prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 300,
-        "stream": stream
+        "max_tokens": 500,
+        "top_p": 0.8,
+        "frequency_penalty": 0.2,
+        "presence_penalty": 0.2,
+        "stream": stream  # Enable streaming when requested
     }
 
-    if not stream:
-        response = requests.post(settings.TOGETHER_API_URL, json=payload, headers=headers)
-        if response.status_code == 200:
-            return response.json()["choices"][0]["message"]["content"]
+    try:
+        logger.info("Sending request to Together AI API...")
+        
+        if stream:
+            # Streaming response handling
+            response = requests.post(
+                settings.TOGETHER_API_URL,
+                json=payload,
+                headers=headers,
+                stream=True,
+                timeout=30
+            )
+            
+            def generate():
+                if response.status_code != 200:
+                    error_msg = handle_error_response(response)
+                    yield f"data: {json.dumps({'text': error_msg, 'done': True})}\n\n"
+                    return
+
+                accumulated_text = ""
+                for line in response.iter_lines():
+                    if line:
+                        try:
+                            line_text = line.decode('utf-8')
+                            if line_text.startswith('data: '):
+                                json_str = line_text[6:]  # Remove 'data: ' prefix
+                                if json_str.strip() == '[DONE]':
+                                    yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
+                                    break
+                                
+                                chunk = json.loads(json_str)
+                                if 'choices' in chunk and len(chunk['choices']) > 0:
+                                    delta = chunk['choices'][0].get('delta', {})
+                                    if 'content' in delta:
+                                        text_chunk = delta['content']
+                                        accumulated_text += text_chunk
+                                        yield f"data: {json.dumps({'text': text_chunk, 'done': False})}\n\n"
+                                        time.sleep(0.05)  # Increased delay from 0.02 to 0.05 seconds for slower typing
+                        except Exception as e:
+                            logger.error(f"Error processing stream chunk: {str(e)}")
+                            continue
+
+            return generate()
         else:
-            return "Sorry, the AI failed to generate a response."
-    else:
-        try:
-            response = requests.post(settings.TOGETHER_API_URL, json=payload, headers=headers, stream=True)
-            if response.status_code != 200:
-                yield "Sorry, the AI failed to generate a response."
-                return
-
-            buffer = ""
-            last_yield_time = time.time()
-            min_chunk_delay = 0.15  # 150ms minimum delay between chunks
-            sentence_delay = 0.5    # 500ms delay between sentences
-            word_delay = 0.08       # 80ms delay between words
-
-            def should_yield_buffer(chunk):
-                # Check if we have a complete sentence or significant phrase
-                sentence_endings = ['.', '!', '?', ':', ';']
-                phrase_endings = [',', '-', ')', '}', ']', '\n']
-                
-                # If buffer ends with sentence ending, add longer delay
-                if any(buffer.rstrip().endswith(end) for end in sentence_endings):
-                    time.sleep(sentence_delay)
-                    return True
-                # If buffer ends with phrase ending, add medium delay
-                elif any(buffer.rstrip().endswith(end) for end in phrase_endings):
-                    time.sleep(word_delay * 2)
-                    return True
-                # If we have complete words (space in current chunk), add small delay
-                elif ' ' in chunk:
-                    time.sleep(word_delay)
-                    return True
-                return False
-
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                    
+            # Non-streaming response handling
+            response = requests.post(
+                settings.TOGETHER_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=20
+            )
+            
+            if response.status_code == 200:
                 try:
-                    line = line.decode('utf-8')
-                    if not line.startswith('data: '):
-                        continue
-                        
-                    try:
-                        data = json.loads(line[6:])
-                        if not data.get("choices") or not len(data["choices"]) > 0:
-                            continue
-                            
-                        if data["choices"][0].get("finish_reason") is not None:
-                            if buffer:  # Yield any remaining buffered content
-                                time.sleep(sentence_delay)
-                                yield buffer
-                            break
-                        
-                        chunk = data["choices"][0].get("delta", {}).get("content", "")
-                        if not chunk:
-                            continue
-                            
-                        buffer += chunk
-                        
-                        # Control streaming pace
-                        current_time = time.time()
-                        if current_time - last_yield_time < min_chunk_delay:
-                            time.sleep(min_chunk_delay - (current_time - last_yield_time))
-                        
-                        # Yield buffer based on natural language breaks
-                        if should_yield_buffer(chunk):
-                            yield buffer
-                            buffer = ""
-                            last_yield_time = time.time()
-                    except json.JSONDecodeError:
-                        continue
-                except UnicodeDecodeError:
-                    continue
-                    
-            if buffer:  # Yield any remaining buffered content
-                time.sleep(sentence_delay)
-                yield buffer
+                    data = response.json()
+                    if "choices" in data and len(data["choices"]) > 0:
+                        ai_response = data["choices"][0]["message"]["content"]
+                        logger.info("Successfully generated AI response")
+                        return ai_response.strip()
+                    else:
+                        logger.error(f"Unexpected API response format: {data}")
+                        return "I apologize, but I couldn't generate a proper response. Please try asking your question again."
+                except (KeyError, IndexError, json.JSONDecodeError) as e:
+                    logger.error(f"Error parsing API response: {str(e)}")
+                    logger.error(f"Response content: {response.text}")
+                    return "I apologize, but there was an error processing the response. Please try again."
+            else:
+                return handle_error_response(response)
                 
-        except Exception as e:
-            print(f"Error in generate_ai_response: {str(e)}")
-            yield "Sorry, there was an error generating the response."
-            return
+    except requests.exceptions.Timeout:
+        logger.error("API request timed out")
+        return "The AI service is taking too long to respond. Please try again."
+    except requests.exceptions.ConnectionError:
+        logger.error("Connection to API failed")
+        return "Could not connect to the AI service. Please check your internet connection and try again."
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return "An unexpected error occurred. Please try again later."
+
+def handle_error_response(response):
+    """Handle different error responses from the API"""
+    try:
+        if response.status_code == 401:
+            logger.error("API authentication failed")
+            return "There was an authentication error with the AI service. Please contact support."
+        elif response.status_code == 429:
+            logger.error("API rate limit exceeded")
+            return "The AI service is currently busy. Please wait a moment and try again."
+        else:
+            logger.error(f"API error {response.status_code}: {response.text}")
+            return "I apologize, but the AI service is currently unavailable. Please try again later."
+    except Exception as e:
+        logger.error(f"Error handling API error response: {str(e)}")
+        return "An unexpected error occurred. Please try again later."

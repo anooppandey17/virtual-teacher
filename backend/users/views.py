@@ -1,13 +1,13 @@
 # users/views.py
 
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.exceptions import ObjectDoesNotExist
 from .models import User #, LearnerProfile
 from .serializers import (
-    AdminProfileSerializer, #ParentProfileSerializer,
+    UserSerializer, AdminProfileSerializer, #ParentProfileSerializer,
     # LearnerProfileSerializer, TeacherProfileSerializer
 )
 from .permissions import IsOwnerOrRelated
@@ -19,6 +19,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 
 User = get_user_model()
 
@@ -38,19 +39,23 @@ def check_username(request):
         return Response({'detail': 'Username is already taken'}, status=status.HTTP_400_BAD_REQUEST)
     return Response({'detail': 'Username is available'}, status=status.HTTP_200_OK)
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
 def current_user(request):
-    if request.user.is_authenticated:
-        return Response({
-            'username': request.user.username,
-            'email': request.user.email,
-            'role': request.user.role,
-            'first_name': request.user.first_name,
-            'last_name': request.user.last_name,
-            'gender': request.user.gender,
-            'phone_number': request.user.phone_number,
-        })
-    return Response({'detail': 'Not authenticated'}, status=401)
+    if not request.user.is_authenticated:
+        return Response({'detail': 'Not authenticated'}, status=401)
+
+    if request.method == 'GET':
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+    
+    elif request.method == 'PATCH':
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
 
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]

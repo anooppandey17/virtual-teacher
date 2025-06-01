@@ -83,6 +83,7 @@ class User(AbstractUser):
     phone_number = models.CharField(max_length=15, blank=True)
     date_joined = models.DateTimeField(default=timezone.now)
     grade = models.CharField(max_length=2, choices=Grade.choices, blank=True)
+    profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

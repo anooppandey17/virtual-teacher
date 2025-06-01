@@ -12,7 +12,7 @@ class ResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Response
         fields = ['id', 'role', 'text', 'created_at', 'prompt']
-        read_only_fields = ['role']
+        read_only_fields = ['assistant']
 
     def validate(self, data):
         if 'prompt' in data:
@@ -22,12 +22,12 @@ class ResponseSerializer(serializers.ModelSerializer):
 class ConversationSerializer(serializers.ModelSerializer):
     messages = ResponseSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
-    prompt = serializers.CharField(write_only=True, required=True, source='text')  # For frontend compatibility
+    prompt = serializers.CharField(write_only=True, required=True, source='text', allow_blank=True)  # For frontend compatibility
 
     class Meta:
         model = LearnerPrompt
-        fields = ['id', 'title', 'text', 'created_at', 'updated_at', 'messages', 'last_message', 'prompt']
-        read_only_fields = ['learner', 'title', 'text']
+        fields = ['id', 'title', 'prompt', 'created_at', 'updated_at', 'messages', 'last_message', 'last_message']
+        read_only_fields = ['learner', 'title','text']
 
     def get_last_message(self, obj):
         last_message = obj.messages.last()

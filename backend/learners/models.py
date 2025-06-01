@@ -17,7 +17,7 @@ class LearnerProfile(models.Model):
 
 class LearnerPrompt(models.Model):
     learner = models.ForeignKey(User, on_delete=models.CASCADE, limit_choices_to={'role': User.Role.LEARNER}, related_name='conversations')
-    text = models.TextField()
+    text = models.TextField(blank=True, null=True)
     title = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

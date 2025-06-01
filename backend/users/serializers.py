@@ -2,11 +2,10 @@
 
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from rest_framework import serializers
-from .models import User
+from .models import User, AdminProfile
 from dj_rest_auth.registration.serializers import SocialLoginSerializer
 from django.contrib.auth import authenticate
 from dj_rest_auth.serializers import LoginSerializer
-from .models import AdminProfile #, LearnerProfile, ParentProfile, TeacherProfile, 
 
 class CustomRegisterSerializer(RegisterSerializer):
     first_name = serializers.CharField(max_length=150, required=True)
@@ -15,6 +14,7 @@ class CustomRegisterSerializer(RegisterSerializer):
     gender = serializers.ChoiceField(choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')])
     phone_number = serializers.CharField(max_length=15)
     grade = serializers.ChoiceField(choices=User.Grade.choices, required=False)
+    profile_photo = serializers.ImageField(required=False)
 
     def validate(self, data):
         data = super().validate(data)
@@ -33,6 +33,7 @@ class CustomRegisterSerializer(RegisterSerializer):
             'gender': self.validated_data.get('gender', ''),
             'phone_number': self.validated_data.get('phone_number', ''),
             'grade': self.validated_data.get('grade', ''),
+            'profile_photo': self.validated_data.get('profile_photo', None),
         })
         return data
 
@@ -79,3 +80,10 @@ class AdminProfileSerializer(serializers.ModelSerializer):
         model = AdminProfile
         fields = '__all__'
         read_only_fields = ['user']
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 
+                 'role', 'gender', 'phone_number', 'grade', 'profile_photo')
+        read_only_fields = ('id', 'role')

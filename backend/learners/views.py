@@ -15,6 +15,7 @@ from django.http import StreamingHttpResponse
 from rest_framework.response import Response as DRFResponse
 from rest_framework import status
 import json
+from django.utils.timezone import now
 
 # Custom permission so only learners can create prompts
 class IsLearner(permissions.BasePermission):
@@ -22,10 +23,6 @@ class IsLearner(permissions.BasePermission):
         return request.user.groups.filter(name='Learner').exists()
 
 class LearnerProfileDetailView(generics.RetrieveUpdateAPIView):
-    """
-    GET /api/learners/<pk>/     → retrieve profile pk
-    PUT / PATCH /api/learners/<pk>/ → update profile pk
-    """
     queryset = LearnerProfile.objects.select_related('user').all()
     serializer_class = LearnerProfileSerializer
     permission_classes = [IsAuthenticated, IsAdminOrIsSelf]
@@ -52,23 +49,24 @@ class PromptListCreateView(generics.ListCreateAPIView):
         if self.request.user.role != 'LEARNER':
             raise PermissionDenied("Only learners can create conversations.")
         
-        # Create the conversation
         conversation = serializer.save(learner=self.request.user)
 
-        # Create the user's message
-        user_message = Response.objects.create(
-            prompt=conversation,
-            role='user',
-            text=conversation.text
-        )
+        if conversation.text:
+            user_message = Response.objects.create(
+                prompt=conversation,
+                role='user',
+                text=conversation.text
+            )
 
-        # Generate and save AI response
-        ai_response = generate_ai_response(user_message.text)
-        Response.objects.create(
-            prompt=conversation,
-            role='assistant',
-            text=ai_response
-        )
+            ai_response = generate_ai_response(user_message.text)
+            try:
+                Response.objects.create(
+                    prompt=conversation,
+                    role='assistant',
+                    text=ai_response
+                )
+            except Exception as e:
+                print(f"Error saving response: {str(e)}")   
 
 class ResponseListView(generics.ListAPIView):
     serializer_class = ResponseSerializer
@@ -113,23 +111,21 @@ class ConversationListCreateView(generics.ListCreateAPIView):
         if self.request.user.role != 'LEARNER':
             raise PermissionDenied("Only learners can create conversations.")
         
-        # Create the conversation
         conversation = serializer.save(learner=self.request.user)
 
-        # Create the user's message
-        user_message = Response.objects.create(
-            prompt=conversation,
-            role='user',
-            text=conversation.text
-        )
+        if conversation.text:
+            user_message = Response.objects.create(
+                prompt=conversation,
+                role='user',
+                text=conversation.text
+            )
 
-        # Generate and save AI response
-        ai_response = generate_ai_response(user_message.text)
-        Response.objects.create(
-            prompt=conversation,
-            role='assistant',
-            text=ai_response
-        )
+            ai_response = generate_ai_response(user_message.text)
+            Response.objects.create(
+                prompt=conversation,
+                role='assistant',
+                text=ai_response
+            )
 
 class ConversationDetailView(generics.RetrieveAPIView):
     serializer_class = ConversationSerializer
@@ -157,11 +153,9 @@ class MessageCreateView(generics.CreateAPIView):
         conversation_id = self.kwargs.get('conversation_id')
         conversation = LearnerPrompt.objects.get(id=conversation_id)
 
-        # Check if user has access to this conversation
         if self.request.user.role == 'LEARNER' and conversation.learner != self.request.user:
             raise PermissionDenied("You don't have access to this conversation.")
 
-        # Create user message
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user_message = serializer.save(
@@ -169,54 +163,49 @@ class MessageCreateView(generics.CreateAPIView):
             role='user'
         )
 
-        # Check if streaming is requested
         stream = request.query_params.get('stream', 'false').lower() == 'true'
-        
-        if not stream:
-            # Generate and save AI response
-            ai_response = generate_ai_response(user_message.text)
-            Response.objects.create(
-                prompt=conversation,
-                role='assistant',
-                text=ai_response
-            )
-            # Update conversation's updated_at timestamp
-            conversation.save()
-            return DRFResponse(serializer.data)
-        else:
-            # Start streaming response
-            def stream_response():
-                collected_response = []
-                try:
-                    # Get the generator from generate_ai_response
-                    response_generator = generate_ai_response(user_message.text, stream=True)
-                    
-                    # Iterate through the generator
-                    for chunk in response_generator:
-                        if chunk:  # Only send non-empty chunks
-                            collected_response.append(chunk)
-                            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-                except Exception as e:
-                    print(f"Streaming error: {str(e)}")
-                    yield f"data: {json.dumps({'chunk': 'Error generating response'})}\n\n"
-                finally:
-                    # Save the complete response
+
+        if stream:
+            ai_stream = generate_ai_response(user_message.text, stream=True)
+
+            def stream_and_store():
+                accumulated_text = ""
+                for chunk in ai_stream:
                     try:
-                        complete_response = ''.join(collected_response)
-                        if complete_response:  # Only save if we have a response
-                            Response.objects.create(
-                                prompt=conversation,
-                                role='assistant',
-                                text=complete_response
-                            )
-                            conversation.save()
-                    except Exception as e:
-                        print(f"Error saving response: {str(e)}")
-                    
+                        data = json.loads(chunk.strip().replace('data: ', ''))
+                        if 'text' in data:
+                            accumulated_text += data['text']
+                        yield chunk
+                    except Exception:
+                        yield chunk
+
+                if accumulated_text.strip():
+                    Response.objects.create(
+                        prompt=conversation,
+                        role='assistant',
+                        text=accumulated_text.strip()
+                    )
+                    conversation.updated_at = now()
+                    conversation.save()
+
             response = StreamingHttpResponse(
-                streaming_content=stream_response(),
+                stream_and_store(),
                 content_type='text/event-stream'
             )
             response['Cache-Control'] = 'no-cache'
             response['X-Accel-Buffering'] = 'no'
             return response
+
+        else:
+            ai_response = generate_ai_response(user_message.text, stream=False)
+            ai_message = Response.objects.create(
+                prompt=conversation,
+                role='assistant',
+                text=ai_response
+            )
+            conversation.save()
+
+            return DRFResponse({
+                'user_message': serializer.data,
+                'ai_message': ResponseSerializer(ai_message).data
+            })
