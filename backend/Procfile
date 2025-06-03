@@ -1,1 +1,1 @@
-web: gunicorn virtual-teacher.wsgi --log-file -
+web: gunicorn virtual-teacher-backend.wsgi --log-file -
