@@ -15,6 +15,7 @@ interface User {
   last_name: string;
   gender: string;
   phone_number: string;
+  grade?: string;
   profile_photo?: string;
 }
 
@@ -37,7 +38,7 @@ export default function ProfilePage() {
 
     const fetchUserProfile = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/users/me/', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/`, {
           headers: {
             Authorization: `Token ${token}`,
           },
@@ -112,7 +113,7 @@ export default function ProfilePage() {
         formDataToSend.append('profile_photo', fileInputRef.current.files[0]);
       }
 
-      const res = await fetch('http://localhost:8000/api/users/me/', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/`, {
         method: 'PATCH',
         headers: {
           Authorization: `Token ${token}`,
@@ -263,6 +264,35 @@ export default function ProfilePage() {
                   />
                 </div>
 
+                {user.role === 'LEARNER' && (
+                  <div>
+                    <label htmlFor="grade" className="block text-sm font-medium text-gray-700">
+                      Grade
+                    </label>
+                    <select
+                      name="grade"
+                      id="grade"
+                      value={formData.grade || ''}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      <option value="">Select grade</option>
+                      <option value="1">Grade 1</option>
+                      <option value="2">Grade 2</option>
+                      <option value="3">Grade 3</option>
+                      <option value="4">Grade 4</option>
+                      <option value="5">Grade 5</option>
+                      <option value="6">Grade 6</option>
+                      <option value="7">Grade 7</option>
+                      <option value="8">Grade 8</option>
+                      <option value="9">Grade 9</option>
+                      <option value="10">Grade 10</option>
+                      <option value="11">Grade 11</option>
+                      <option value="12">Grade 12</option>
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="gender" className="block text-sm font-medium text-gray-700">
                     Gender
@@ -322,6 +352,13 @@ export default function ProfilePage() {
                 <h3 className="text-sm font-medium text-gray-500">Phone Number</h3>
                 <p className="mt-1 text-sm text-gray-900">{user.phone_number || 'Not provided'}</p>
               </div>
+
+              {user.role === 'LEARNER' && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500">Grade</h3>
+                  <p className="mt-1 text-sm text-gray-900">{user.grade ? `Grade ${user.grade}` : 'Not specified'}</p>
+                </div>
+              )}
 
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Username</h3>

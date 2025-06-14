@@ -52,21 +52,23 @@ class PromptListCreateView(generics.ListCreateAPIView):
         conversation = serializer.save(learner=self.request.user)
 
         if conversation.text:
-            user_message = Response.objects.create(
+
+            words = conversation.text.strip().split()
+            if len(words) > 5:
+                conversation.title = " ".join(words[:5])
+            else:
+                conversation.title = conversation.text.strip()
+            conversation.save()
+
+            # Only create the user message, let frontend handle AI response
+            Response.objects.create(
                 prompt=conversation,
                 role='user',
                 text=conversation.text
             )
-
-            ai_response = generate_ai_response(user_message.text)
-            try:
-                Response.objects.create(
-                    prompt=conversation,
-                    role='assistant',
-                    text=ai_response
-                )
-            except Exception as e:
-                print(f"Error saving response: {str(e)}")   
+            
+            # Don't generate AI response here - let frontend handle streaming
+            # This prevents duplicate messages and allows proper streaming
 
 class ResponseListView(generics.ListAPIView):
     serializer_class = ResponseSerializer
@@ -114,18 +116,15 @@ class ConversationListCreateView(generics.ListCreateAPIView):
         conversation = serializer.save(learner=self.request.user)
 
         if conversation.text:
-            user_message = Response.objects.create(
+            # Only create the user message, let frontend handle AI response
+            Response.objects.create(
                 prompt=conversation,
                 role='user',
                 text=conversation.text
             )
-
-            ai_response = generate_ai_response(user_message.text)
-            Response.objects.create(
-                prompt=conversation,
-                role='assistant',
-                text=ai_response
-            )
+            
+            # Don't generate AI response here - let frontend handle streaming
+            # This prevents duplicate messages and allows proper streaming
 
 class ConversationDetailView(generics.RetrieveAPIView):
     serializer_class = ConversationSerializer
@@ -158,15 +157,34 @@ class MessageCreateView(generics.CreateAPIView):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user_message = serializer.save(
-            prompt=conversation,
-            role='user'
-        )
+        
+        # Only create user message if text is not empty
+        user_message = None
+        if serializer.validated_data.get('text', '').strip():
+            user_message = serializer.save(
+                prompt=conversation,
+                role='user'
+            )
 
         stream = request.query_params.get('stream', 'false').lower() == 'true'
 
         if stream:
-            ai_stream = generate_ai_response(user_message.text, stream=True)
+            # Use the user message text if available, otherwise use the conversation's text
+            prompt_text = user_message.text if user_message else conversation.text
+            
+            # Get conversation history for context
+            conversation_history = []
+            previous_responses = Response.objects.filter(prompt=conversation).order_by('created_at')
+            for response in previous_responses:
+                conversation_history.append({
+                    'role': response.role,
+                    'text': response.text,
+                    'created_at': response.created_at
+                })
+            
+            # Pass user's grade and conversation history to the AI response generation
+            user_grade = self.request.user.grade
+            ai_stream = generate_ai_response(prompt_text, stream=True, user_grade=user_grade, conversation_history=conversation_history)
 
             def stream_and_store():
                 accumulated_text = ""
@@ -197,7 +215,22 @@ class MessageCreateView(generics.CreateAPIView):
             return response
 
         else:
-            ai_response = generate_ai_response(user_message.text, stream=False)
+            # Use the user message text if available, otherwise use the conversation's text
+            prompt_text = user_message.text if user_message else conversation.text
+            
+            # Get conversation history for context
+            conversation_history = []
+            previous_responses = Response.objects.filter(prompt=conversation).order_by('created_at')
+            for response in previous_responses:
+                conversation_history.append({
+                    'role': response.role,
+                    'text': response.text,
+                    'created_at': response.created_at
+                })
+            
+            # Pass user's grade and conversation history to the AI response generation
+            user_grade = self.request.user.grade
+            ai_response = generate_ai_response(prompt_text, stream=False, user_grade=user_grade, conversation_history=conversation_history)
             ai_message = Response.objects.create(
                 prompt=conversation,
                 role='assistant',
@@ -206,6 +239,6 @@ class MessageCreateView(generics.CreateAPIView):
             conversation.save()
 
             return DRFResponse({
-                'user_message': serializer.data,
+                'user_message': serializer.data if user_message else None,
                 'ai_message': ResponseSerializer(ai_message).data
             })

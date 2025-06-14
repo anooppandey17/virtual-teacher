@@ -26,6 +26,23 @@ An interactive learning platform that connects teachers, students, and parents i
 
 ## Setup Instructions
 
+### Quick Setup (Recommended)
+
+Run the setup script to automatically create environment files:
+
+**On Windows:**
+```bash
+setup-env.bat
+```
+
+**On macOS/Linux:**
+```bash
+chmod +x setup-env.sh
+./setup-env.sh
+```
+
+### Manual Setup
+
 ### Backend Setup
 
 1. Create and activate a virtual environment:
@@ -40,12 +57,41 @@ cd backend
 pip install -r requirements.txt
 ```
 
-3. Run migrations:
+3. Create environment file:
+```bash
+# Create .env file in backend directory
+cp .env.example .env  # If .env.example exists
+# Or create .env manually with the following variables:
+```
+
+**Backend Environment Variables (.env):**
+```bash
+# Django Settings
+DEBUG=True
+SECRET_KEY=your-secret-key-here
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Frontend URL for CORS
+FRONTEND_URL=http://localhost:3000
+
+# Database Settings
+PGDATABASE=virtual_teacher
+PGUSER=vteacher_user
+PGPASSWORD=password
+PGHOST=localhost
+PGPORT=5432
+
+# AI API Settings
+TOGETHER_API_KEY=your-together-api-key-here
+TOGETHER_MODEL=mistralai/Mixtral-8x7B-Instruct-v0.1
+```
+
+4. Run migrations:
 ```bash
 python manage.py migrate
 ```
 
-4. Start the development server:
+5. Start the development server:
 ```bash
 python manage.py runserver
 ```
@@ -58,25 +104,46 @@ cd frontend
 npm install
 ```
 
-2. Start the development server:
+2. Create environment file:
+```bash
+# Create .env.local file in frontend directory
+```
+
+**Frontend Environment Variables (.env.local):**
+```bash
+# API Base URL - Change this for different environments
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+3. Start the development server:
 ```bash
 npm run dev
 ```
 
-## Environment Variables
+## Environment-Specific Configuration
 
-Create `.env` files in both frontend and backend directories:
+### Local Development
+- **Frontend**: Uses `http://localhost:8000` for API calls
+- **Backend**: Allows CORS from `http://localhost:3000`
 
-### Backend (.env)
-```
-DEBUG=True
-SECRET_KEY=your-secret-key
-DATABASE_URL=your-database-url
+### Production Deployment
+- **Frontend**: Set `NEXT_PUBLIC_API_URL` to your production API URL
+- **Backend**: Set `FRONTEND_URL` to your production frontend URL
+
+**Example Production Environment Variables:**
+
+Frontend (.env.production):
+```bash
+NEXT_PUBLIC_API_URL=https://your-production-api.com
 ```
 
-### Frontend (.env.local)
-```
-NEXT_PUBLIC_API_URL=http://localhost:8000
+Backend (.env):
+```bash
+DEBUG=False
+SECRET_KEY=your-production-secret-key
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+FRONTEND_URL=https://your-production-frontend.com
+ADDITIONAL_CORS_ORIGINS=https://your-production-frontend.com
 ```
 
 ## Contributing

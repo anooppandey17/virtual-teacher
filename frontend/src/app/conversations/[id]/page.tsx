@@ -28,6 +28,9 @@ export default function ConversationPage({ params }: { params: { id: string } })
   const [error, setError] = useState('');
   const [streamingText, setStreamingText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [visibleChars, setVisibleChars] = useState(0);
+  const [shouldStop, setShouldStop] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -35,9 +38,29 @@ export default function ConversationPage({ params }: { params: { id: string } })
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const refreshConversation = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${params.id}/`, {
+        headers: {
+          Authorization: `Token ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setConversation(data);
+      }
+    } catch (err) {
+      console.error('Failed to refresh conversation:', err);
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
-  }, [conversation?.messages]);
+  }, [conversation?.messages, streamingText]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -48,7 +71,7 @@ export default function ConversationPage({ params }: { params: { id: string } })
 
     const fetchConversation = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/learners/conversations/${params.id}/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${params.id}/`, {
           headers: {
             Authorization: `Token ${token}`,
           },
@@ -70,6 +93,45 @@ export default function ConversationPage({ params }: { params: { id: string } })
     fetchConversation();
   }, [params.id, router]);
 
+  const handleStop = () => {
+    // Set stop flag immediately
+    setShouldStop(true);
+    
+    // Abort the request immediately
+    if (abortController) {
+      abortController.abort();
+    }
+    
+    // Immediately save the partial response to the conversation
+    if (streamingText.trim()) {
+      const aiMessage = {
+        id: Date.now(),
+        text: streamingText + ' [Response stopped by user]',
+        role: 'assistant' as const,
+        created_at: new Date().toISOString(),
+      };
+
+      setConversation(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: [...prev.messages, aiMessage],
+        };
+      });
+    }
+    
+    // Clear streaming state immediately
+    setIsStreaming(false);
+    setStreamingText('');
+    setVisibleChars(0);
+    setSending(false);
+    
+    // Refresh conversation from database to ensure consistency
+    setTimeout(() => {
+      refreshConversation();
+    }, 100);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
@@ -84,11 +146,21 @@ export default function ConversationPage({ params }: { params: { id: string } })
     setError('');
     setIsStreaming(true);
     setStreamingText('');
+    setVisibleChars(0);
+    setShouldStop(false);
+    
+    // Create abort controller for this request
+    const controller = new AbortController();
+    setAbortController(controller);
+    
+    // Store the message text and clear input immediately
+    const messageText = newMessage;
+    setNewMessage('');
     
     // Add the user's message immediately for better UX
     const tempUserMessage = {
       id: Date.now(),
-      text: newMessage,
+      text: messageText,
       role: 'user' as const,
       created_at: new Date().toISOString(),
     };
@@ -100,18 +172,16 @@ export default function ConversationPage({ params }: { params: { id: string } })
         messages: [...prev.messages, tempUserMessage],
       };
     });
-    
-    // Clear input immediately
-    setNewMessage('');
 
     try {
-      const response = await fetch(`http://localhost:8000/api/learners/conversations/${params.id}/messages/?stream=true`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${params.id}/messages/?stream=true`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Token ${token}`,
         },
-        body: JSON.stringify({ text: newMessage }),
+        body: JSON.stringify({ text: messageText }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -126,6 +196,12 @@ export default function ConversationPage({ params }: { params: { id: string } })
       let accumulatedText = '';
       
       while (true) {
+        // Check if user wants to stop - do this at the beginning of each iteration
+        if (shouldStop) {
+          reader.cancel();
+          break;
+        }
+
         const { done, value } = await reader.read();
         
         if (done) {
@@ -137,50 +213,110 @@ export default function ConversationPage({ params }: { params: { id: string } })
         const lines = chunk.split('\n');
 
         for (const line of lines) {
+          // Check for stop again before processing each line
+          if (shouldStop) {
+            reader.cancel();
+            break;
+          }
+          
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(5));
               if (data.done) {
-                // Save the complete message to the conversation
-                const aiMessage = {
-                  id: Date.now(),
-                  text: accumulatedText,
-                  role: 'assistant' as const,
-                  created_at: new Date().toISOString(),
-                };
-
-                setConversation(prev => {
-                  if (!prev) return null;
-                  return {
-                    ...prev,
-                    messages: [...prev.messages, aiMessage],
+                // Check if the accumulated text is an error message
+                const isErrorMessage = accumulatedText.includes('I apologize') && 
+                                     (accumulatedText.includes('unavailable') || 
+                                      accumulatedText.includes('error') || 
+                                      accumulatedText.includes('failed') ||
+                                      accumulatedText.includes('busy') ||
+                                      accumulatedText.includes('timeout'));
+                
+                if (isErrorMessage) {
+                  // Remove the user message and show error
+                  setConversation(prev => {
+                    if (!prev) return null;
+                    return {
+                      ...prev,
+                      messages: prev.messages.filter(m => m.id !== tempUserMessage.id),
+                    };
+                  });
+                  setError(accumulatedText);
+                } else {
+                  // Save the complete message to the conversation
+                  const aiMessage = {
+                    id: Date.now(),
+                    text: accumulatedText,
+                    role: 'assistant' as const,
+                    created_at: new Date().toISOString(),
                   };
-                });
+
+                  setConversation(prev => {
+                    if (!prev) return null;
+                    return {
+                      ...prev,
+                      messages: [...prev.messages, aiMessage],
+                    };
+                  });
+                }
                 setIsStreaming(false);
                 break;
               } else {
+                // Check for stop before adding text
+                if (shouldStop) {
+                  reader.cancel();
+                  break;
+                }
+                
                 accumulatedText += data.text;
                 setStreamingText(accumulatedText);
+                setVisibleChars(prev => prev + 1);
+                
+                // Add a small delay for realistic typing speed
+                await new Promise(resolve => setTimeout(resolve, 30));
               }
             } catch (e) {
               console.error('Error parsing streaming data:', e);
             }
           }
         }
+        
+        // Check for stop after processing all lines in the chunk
+        if (shouldStop) {
+          reader.cancel();
+          break;
+        }
+      }
+
+      // If stopped by user, save the partial response
+      if (shouldStop && accumulatedText.trim()) {
+        // This is now handled in handleStop function
+        // No need to duplicate the logic here
       }
     } catch (err) {
-      setError('Error: Failed to process the response. Please try again.');
-      // Remove the temporary message if there was an error
-      setConversation(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          messages: prev.messages.filter(m => m.id !== tempUserMessage.id),
-        };
-      });
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Request was aborted, this is expected when stopping
+        console.log('Request aborted by user');
+      } else {
+        setError('Error: Failed to process the response. Please try again.');
+        // Remove the temporary message if there was an error
+        setConversation(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            messages: prev.messages.filter(m => m.id !== tempUserMessage.id),
+          };
+        });
+      }
     } finally {
       setSending(false);
       setIsStreaming(false);
+      setShouldStop(false);
+      setAbortController(null);
+      
+      // Refresh conversation from database to ensure consistency
+      setTimeout(() => {
+        refreshConversation();
+      }, 100);
     }
   };
 
@@ -253,9 +389,16 @@ export default function ConversationPage({ params }: { params: { id: string } })
           
           {isStreaming && (
             <div className="text-left mb-4">
-              <div className="inline-block rounded-lg px-4 py-2 bg-gray-200 text-gray-800">
-                <p className="break-words whitespace-pre-wrap typing-animation">
-                  {streamingText}
+              <div className="inline-block rounded-lg px-4 py-2 bg-gray-200 text-gray-800 border-2 border-blue-300 max-w-[70%]">
+                <p className="break-words whitespace-pre-wrap">
+                  {streamingText ? (
+                    <>
+                      {streamingText.slice(0, visibleChars)}
+                      <span className="cursor-blink">|</span>
+                    </>
+                  ) : (
+                    'AI is thinking...'
+                  )}
                 </p>
               </div>
             </div>
@@ -281,16 +424,26 @@ export default function ConversationPage({ params }: { params: { id: string } })
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type your message..."
-            disabled={sending}
+            disabled={sending && !shouldStop}
             className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           />
-          <button
-            type="submit"
-            disabled={!newMessage.trim() || sending}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {sending ? 'Teacher is thinking...' : 'Send'}
-          </button>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              Stop
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!newMessage.trim() || sending}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sending ? 'Teacher is thinking...' : 'Send'}
+            </button>
+          )}
         </form>
       </div>
     </div>

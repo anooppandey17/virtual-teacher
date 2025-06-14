@@ -61,7 +61,7 @@ export default function LearnerDashboard() {
 
     const fetchConversations = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/learners/conversations/', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/`, {
           headers: {
             Authorization: `Token ${token}`,
           },
@@ -84,31 +84,9 @@ export default function LearnerDashboard() {
   }, [router]);
 
   const createNewConversation = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
-    try {
-      const res = await fetch('http://localhost:8000/api/learners/conversations/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Token ${token}`,
-        },
-        body: JSON.stringify({ prompt: "" }),  // <-- Explicitly send empty prompt
-      });
-
-      if (res.ok) {
-        const conversation = await res.json();
-        router.push(`/conversations/${conversation.id}`);
-      } else {
-        setError('Failed to create conversation');
-      }
-    } catch (err) {
-      setError('Network error');
-    }
+    // Navigate to a new conversation page without creating a conversation in the database
+    // The conversation will be created when the user sends their first message
+    router.push('/conversations/new');
   };
 
   const ConversationGroup = ({ title, items, emptyMessage }: { title: string; items: Conversation[]; emptyMessage?: string }) => (

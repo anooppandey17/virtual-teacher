@@ -15,6 +15,7 @@ interface User {
   last_name: string;
   gender: string;
   phone_number: string;
+  grade?: string;
   profile_photo?: string;
 }
 
@@ -33,7 +34,7 @@ export default function ClientNavbar() {
       }
 
       try {
-        const res = await fetch('http://localhost:8000/api/users/me/', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

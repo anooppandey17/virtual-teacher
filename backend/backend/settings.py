@@ -1,3 +1,5 @@
+# import dj_database_url
+from decouple import config
 import os
 from pathlib import Path
 
@@ -5,12 +7,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-&dte7%swezrv0isa1$n$_r8zrob=2f(xqa!68-*9yv8x27^t00"
+SECRET_KEY = config("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*').split(',')
 
 # Application definition
 
@@ -67,8 +69,8 @@ SIMPLE_JWT = {
 SITE_ID = 1
 
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
-TOGETHER_API_KEY = "a6c2e9a28b4572aba3a385a02eab43c4b49b92680b48ea1dbf73b948c30f7d31"  # Replace this with your real key (use environment variables in production)
-TOGETHER_MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1"  # Or your preferred model
+TOGETHER_API_KEY = config('TOGETHER_API_KEY', default="a6c2e9a28b4572aba3a385a02eab43c4b49b92680b48ea1dbf73b948c30f7d31")  # Use environment variable in production
+TOGETHER_MODEL = config('TOGETHER_MODEL', default="mistralai/Mixtral-8x7B-Instruct-v0.1")  # Or your preferred model
 
 REST_AUTH = {
     'REGISTER_SERIALIZER': 'users.serializers.CustomRegisterSerializer',
@@ -126,9 +128,18 @@ WSGI_APPLICATION = "backend.wsgi.application"
 
 # CORS settings
 CORS_ALLOW_CREDENTIALS = True
+
+# Get frontend URL from environment variable, default to localhost for development
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
+
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Next.js dev server
+    FRONTEND_URL,  # Dynamic frontend URL
 ]
+
+# Add additional origins if needed (comma-separated in environment variable)
+ADDITIONAL_CORS_ORIGINS = config('ADDITIONAL_CORS_ORIGINS', default='').split(',')
+if ADDITIONAL_CORS_ORIGINS and ADDITIONAL_CORS_ORIGINS[0]:  # Only add if not empty
+    CORS_ALLOWED_ORIGINS.extend([origin.strip() for origin in ADDITIONAL_CORS_ORIGINS if origin.strip()])
 
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -153,8 +164,12 @@ CORS_ALLOW_HEADERS = [
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
+    FRONTEND_URL,  # Dynamic frontend URL
 ]
+
+# Add additional CSRF origins if needed
+if ADDITIONAL_CORS_ORIGINS and ADDITIONAL_CORS_ORIGINS[0]:
+    CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in ADDITIONAL_CORS_ORIGINS if origin.strip()])
 
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False  # False since we need to access it in JS
@@ -163,6 +178,10 @@ SESSION_COOKIE_HTTPONLY = True
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+
+# DATABASES = {
+#     'default': dj_database_url.config(default=config('DATABASE_URL'))
+# }
 
 DATABASES = {
     'default': {
@@ -174,6 +193,7 @@ DATABASES = {
         'PORT': os.getenv('PGPORT', '5432'),
     }
 }
+
 
 
 # Password validation
@@ -211,3 +231,5 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = 'users.User'
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
