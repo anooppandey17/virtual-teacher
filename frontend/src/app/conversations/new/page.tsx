@@ -31,6 +31,33 @@ export default function NewConversationPage() {
     }, 100);
   };
 
+  const fetchConversationMessages = async (convId: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${convId}/`, {
+        headers: {
+          Authorization: `Token ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const conversation = await response.json();
+        if (conversation.responses) {
+          setMessages(conversation.responses.map((resp: any) => ({
+            id: resp.id,
+            text: resp.text,
+            role: resp.role,
+            created_at: resp.created_at,
+          })));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching conversation messages:', err);
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamingText]);
@@ -142,14 +169,7 @@ export default function NewConversationPage() {
         });
       } else {
         // Create new conversation with the first message
-        // Add user message locally for better UX
-        const tempUserMessage = {
-          id: tempMessageId,
-          text: messageText,
-          role: 'user' as const,
-          created_at: new Date().toISOString(),
-        };
-        setMessages(prev => [...prev, tempUserMessage]);
+        // Don't add user message locally since backend will create it
         
         // Create conversation without generating AI response (let frontend handle streaming)
         const createResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/`, {
@@ -171,6 +191,9 @@ export default function NewConversationPage() {
         
         // Update the URL to reflect the new conversation ID
         router.replace(`/conversations/${conversation.id}`);
+        
+        // Fetch the conversation messages to display the user message created by backend
+        await fetchConversationMessages(conversation.id);
         
         // Get the streaming response for the AI reply
         response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${conversation.id}/messages/?stream=true`, {

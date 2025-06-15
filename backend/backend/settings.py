@@ -69,8 +69,9 @@ SIMPLE_JWT = {
 SITE_ID = 1
 
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
-TOGETHER_API_KEY = config('TOGETHER_API_KEY', default="a6c2e9a28b4572aba3a385a02eab43c4b49b92680b48ea1dbf73b948c30f7d31")  # Use environment variable in production
+TOGETHER_API_KEY = config('TOGETHER_API_KEY')  # Read from .env file
 TOGETHER_MODEL = config('TOGETHER_MODEL', default="mistralai/Mixtral-8x7B-Instruct-v0.1")  # Or your preferred model
+
 
 REST_AUTH = {
     'REGISTER_SERIALIZER': 'users.serializers.CustomRegisterSerializer',

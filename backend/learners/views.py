@@ -158,9 +158,17 @@ class MessageCreateView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # Only create user message if text is not empty
+        # Check if this is the first message in the conversation
+        existing_user_messages = Response.objects.filter(prompt=conversation, role='user').count()
+        
+        # Only create user message if this is not the first message and text is not empty
         user_message = None
-        if serializer.validated_data.get('text', '').strip():
+        if existing_user_messages == 0:
+            # This is the first message, don't create user message since it's already created
+            # Use the conversation's text for AI response
+            pass
+        elif serializer.validated_data.get('text', '').strip():
+            # This is a subsequent message, create user message
             user_message = serializer.save(
                 prompt=conversation,
                 role='user'
