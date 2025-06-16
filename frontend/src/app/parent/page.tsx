@@ -31,7 +31,7 @@ export default function ParentDashboard() {
 
     const fetchChildren = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/parent/children/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/parent/children/`, {
           headers: {
             Authorization: `Token ${token}`,
           },

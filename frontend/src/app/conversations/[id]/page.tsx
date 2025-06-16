@@ -43,7 +43,7 @@ export default function ConversationPage({ params }: { params: { id: string } })
     if (!token) return;
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${params.id}/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/${params.id}/`, {
         headers: {
           Authorization: `Token ${token}`,
         },
@@ -71,7 +71,7 @@ export default function ConversationPage({ params }: { params: { id: string } })
 
     const fetchConversation = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${params.id}/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/${params.id}/`, {
           headers: {
             Authorization: `Token ${token}`,
           },
@@ -174,7 +174,7 @@ export default function ConversationPage({ params }: { params: { id: string } })
     });
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${params.id}/messages/?stream=true`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/${params.id}/messages/?stream=true`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

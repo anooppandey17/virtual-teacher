@@ -39,7 +39,7 @@ export default function SignupPage() {
 
     setCheckingUsername(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/check-username/?username=${encodeURIComponent(username)}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/check-username/?username=${encodeURIComponent(username)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/registration/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/registration/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

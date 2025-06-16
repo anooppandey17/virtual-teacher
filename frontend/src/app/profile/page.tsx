@@ -38,7 +38,7 @@ export default function ProfilePage() {
 
     const fetchUserProfile = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/me/`, {
           headers: {
             Authorization: `Token ${token}`,
           },
@@ -113,7 +113,7 @@ export default function ProfilePage() {
         formDataToSend.append('profile_photo', fileInputRef.current.files[0]);
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/me/`, {
         method: 'PATCH',
         headers: {
           Authorization: `Token ${token}`,

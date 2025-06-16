@@ -61,7 +61,7 @@ export default function LearnerDashboard() {
 
     const fetchConversations = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/`, {
           headers: {
             Authorization: `Token ${token}`,
           },

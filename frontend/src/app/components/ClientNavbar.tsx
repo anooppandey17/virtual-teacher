@@ -34,7 +34,7 @@ export default function ClientNavbar() {
       }
 
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/me/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/me/`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

@@ -29,7 +29,7 @@ export default function TeacherDashboard() {
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/teacher/students/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/teacher/students/`, {
           headers: {
             Authorization: `Token ${token}`,
           },

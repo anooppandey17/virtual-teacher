@@ -36,7 +36,7 @@ export default function NewConversationPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${convId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/${convId}/`, {
         headers: {
           Authorization: `Token ${token}`,
         },
@@ -85,7 +85,7 @@ export default function NewConversationPage() {
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${conversationId}/messages/`, {
+          await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/${conversationId}/messages/`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -158,7 +158,7 @@ export default function NewConversationPage() {
         };
         setMessages(prev => [...prev, tempUserMessage]);
         
-        response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${conversationId}/messages/?stream=true`, {
+        response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/${conversationId}/messages/?stream=true`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -172,7 +172,7 @@ export default function NewConversationPage() {
         // Don't add user message locally since backend will create it
         
         // Create conversation without generating AI response (let frontend handle streaming)
-        const createResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/`, {
+        const createResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -196,7 +196,7 @@ export default function NewConversationPage() {
         await fetchConversationMessages(conversation.id);
         
         // Get the streaming response for the AI reply
-        response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learners/conversations/${conversation.id}/messages/?stream=true`, {
+        response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/learners/conversations/${conversation.id}/messages/?stream=true`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
